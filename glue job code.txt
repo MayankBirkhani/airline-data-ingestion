@@ -1,0 +1,45 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from awsglue.dynamicframe import DynamicFrame
+import re
+
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+# Script generated for node daily_flight_data
+daily_flight_data_node1717516312598 = glueContext.create_dynamic_frame.from_catalog(database="airline_datamart", table_name="raw_daily_flights", transformation_ctx="daily_flight_data_node1717516312598")
+
+# Script generated for node airport_dim
+airport_dim_node1717517239047 = glueContext.create_dynamic_frame.from_catalog(database="airline_datamart", table_name="dev_airlines_airports_dim", redshift_tmp_dir="s3://redshift-temproject-data/airline-dim/",transformation_ctx="airport_dim_node1717517239047")
+
+# Script generated for node Filter
+Filter_node1717516884377 = Filter.apply(frame=daily_flight_data_node1717516312598, f=lambda row: (row["depdelay"] >= 60), transformation_ctx="Filter_node1717516884377")
+
+# Script generated for node Join_for_dept_airport
+Filter_node1717516884377DF = Filter_node1717516884377.toDF()
+airport_dim_node1717517239047DF = airport_dim_node1717517239047.toDF()
+Join_for_dept_airport_node1717520681401 = DynamicFrame.fromDF(Filter_node1717516884377DF.join(airport_dim_node1717517239047DF, (Filter_node1717516884377DF['originairportid'] == airport_dim_node1717517239047DF['airport_id']), "left"), glueContext, "Join_for_dept_airport_node1717520681401")
+
+# Script generated for node modify_dep_airport_columns
+modify_dep_airport_columns_node1717520897449 = ApplyMapping.apply(frame=Join_for_dept_airport_node1717520681401, mappings=[("depdelay", "long", "dep_delay", "bigint"), ("arrdelay", "long", "arr_delay", "bigint"), ("destairportid", "long", "destairportid", "long"), ("carrier", "string", "carrier", "string"), ("city", "string", "dep_city", "string"), ("name", "string", "dep_airport", "string"), ("state", "string", "dep_state", "string")], transformation_ctx="modify_dep_airport_columns_node1717520897449")
+
+# Script generated for node Join_for_arrv_airport
+modify_dep_airport_columns_node1717520897449DF = modify_dep_airport_columns_node1717520897449.toDF()
+airport_dim_node1717517239047DF = airport_dim_node1717517239047.toDF()
+Join_for_arrv_airport_node1717522192013 = DynamicFrame.fromDF(modify_dep_airport_columns_node1717520897449DF.join(airport_dim_node1717517239047DF, (modify_dep_airport_columns_node1717520897449DF['destairportid'] == airport_dim_node1717517239047DF['airport_id']), "left"), glueContext, "Join_for_arrv_airport_node1717522192013")
+
+# Script generated for node modify_arr_airport_columns
+modify_arr_airport_columns_node1717522447350 = ApplyMapping.apply(frame=Join_for_arrv_airport_node1717522192013, mappings=[("carrier", "string", "carrier", "string"), ("dep_state", "string", "dep_state", "string"), ("state", "string", "arr_state", "string"), ("arr_delay", "bigint", "arr_delay", "long"), ("city", "string", "arr_city", "string"), ("name", "string", "arr_airport", "string"), ("dep_city", "string", "dep_city", "string"), ("dep_delay", "bigint", "dep_delay", "long"), ("dep_airport", "string", "dep_airport", "string")], transformation_ctx="modify_arr_airport_columns_node1717522447350")
+
+# Script generated for node redshift_target_table
+redshift_target_table_node1717522977150 = glueContext.write_dynamic_frame.from_catalog(frame=modify_arr_airport_columns_node1717522447350, database="airline_datamart", table_name="dev_airlines_daily_flights_fact", redshift_tmp_dir="s3://redshift-temproject-data/airline-fact/",additional_options={"aws_iam_role": "arn:aws:iam::975050270575:role/redshift-role"}, transformation_ctx="redshift_target_table_node1717522977150")
+
+job.commit()
